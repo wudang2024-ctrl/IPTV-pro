@@ -66,9 +66,62 @@ fun VideoPlayerView(
     var isCarouselEnabled by remember { mutableStateOf(false) }
     var carouselIntervalSeconds by remember { mutableStateOf(10) } // Seconds per channel
 
+    // Audio and Video decoder configuration options
+    var passthroughEnabled by remember { mutableStateOf(false) }
+    var avsPriorityEnabled by remember { mutableStateOf(true) }
+
     // ExoPlayer Instance
-    val exoPlayer = remember(decoderMode, playerEngine) {
-        val renderersFactory = DefaultRenderersFactory(context).apply {
+    val exoPlayer = remember(decoderMode, playerEngine, passthroughEnabled, avsPriorityEnabled) {
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink? {
+                val audioCapabilities = if (passthroughEnabled) {
+                    // Force support for DTS, AC3, AC4, PCM, TrueHD, DRA for high fidelity bitstream passthrough
+                    androidx.media3.exoplayer.audio.AudioCapabilities(
+                        intArrayOf(
+                            android.media.AudioFormat.ENCODING_PCM_16BIT,
+                            android.media.AudioFormat.ENCODING_PCM_FLOAT,
+                            android.media.AudioFormat.ENCODING_AC3,
+                            android.media.AudioFormat.ENCODING_E_AC3,
+                            android.media.AudioFormat.ENCODING_E_AC3_JOC,
+                            android.media.AudioFormat.ENCODING_AC4,
+                            android.media.AudioFormat.ENCODING_DTS,
+                            android.media.AudioFormat.ENCODING_DTS_HD,
+                            android.media.AudioFormat.ENCODING_DOLBY_TRUEHD,
+                            28 // AudioFormat.ENCODING_DRA (DRA codec constant value is 28)
+                        ),
+                        8 // Support up to 7.1 channel output (8 channels)
+                    )
+                } else {
+                    // Standard device auto-detected capabilities with PCM / AC3 fallback to prevent silent playbacks
+                    val devCaps = androidx.media3.exoplayer.audio.AudioCapabilities.getCapabilities(context)
+                    if (avsPriorityEnabled) {
+                        // Blend standard capabilities with forced PCM, AC3, and DRA to bypass problematic HDMI EDID reports
+                        androidx.media3.exoplayer.audio.AudioCapabilities(
+                            intArrayOf(
+                                android.media.AudioFormat.ENCODING_PCM_16BIT,
+                                android.media.AudioFormat.ENCODING_PCM_FLOAT,
+                                android.media.AudioFormat.ENCODING_AC3,
+                                android.media.AudioFormat.ENCODING_E_AC3,
+                                28 // DRA audio format
+                            ),
+                            2
+                        )
+                    } else {
+                        devCaps
+                    }
+                }
+
+                val audioSink = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setAudioCapabilities(audioCapabilities)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+                return audioSink
+            }
+        }.apply {
             setExtensionRendererMode(
                 when (decoderMode) {
                     "Software" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
@@ -145,6 +198,12 @@ fun VideoPlayerView(
                     }
                     uriLower.contains(".mpd") || uriLower.contains("mpd") -> {
                         mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+                    }
+                    uriLower.contains("avs2") || uriLower.contains(".avs2") -> {
+                        mediaItemBuilder.setMimeType("video/avs2")
+                    }
+                    uriLower.contains("avs+") || uriLower.contains(".avs") -> {
+                        mediaItemBuilder.setMimeType("video/avs-video")
                     }
                     uriLower.contains("shanghai.php") || uriLower.contains("id=mdy") || uriLower.contains(".ts") || uriLower.contains("mpegts") -> {
                         // "shanghai.php?id=mdy" typically serves an IPTV multicast MPEG-TS format
@@ -341,123 +400,193 @@ fun VideoPlayerView(
                     )
                 }
 
-                // Bottom bar
-                Row(
+                // Bottom bar container with advanced options and controls
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .background(Color.Black.copy(alpha = 0.75f))
                         .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { onChannelSwitched(false) }) {
-                            Icon(Icons.Default.SkipPrevious, "上一个", tint = Color.White)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = { onChannelSwitched(true) }) {
-                            Icon(Icons.Default.SkipNext, "下一个", tint = Color.White)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        
-                        // Carousel Mode (多画面自动轮播) Button
-                        IconButton(
-                            onClick = { isCarouselEnabled = !isCarouselEnabled },
-                            modifier = Modifier.testTag("player_carousel_btn")
-                        ) {
+                    // Advanced configurations row (声音穿透 / 国标解码与DRA音轨)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Passthrough toggle
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.Autorenew,
-                                contentDescription = "多画面轮播",
-                                tint = if (isCarouselEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                                modifier = Modifier.size(20.dp)
+                                imageVector = Icons.Default.SettingsVoice,
+                                contentDescription = "声音穿透",
+                                tint = if (passthroughEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(16.dp)
                             )
-                        }
-                        
-                        if (isCarouselEnabled) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text("轮播:", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                listOf(10, 30, 60).forEach { sec ->
-                                    TextButton(
-                                        onClick = { carouselIntervalSeconds = sec },
-                                        colors = ButtonDefaults.textButtonColors(
-                                            contentColor = if (carouselIntervalSeconds == sec) MaterialTheme.colorScheme.primary else Color.LightGray
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                        modifier = Modifier.defaultMinSize(minWidth = 28.dp, minHeight = 24.dp)
-                                    ) {
-                                        Text(
-                                            "${sec}秒",
-                                            fontSize = 10.sp,
-                                            fontWeight = if (carouselIntervalSeconds == sec) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("音频输出模式: ", color = Color.LightGray, fontSize = 11.sp)
+                            listOf(false to "解码输出 (PCM)", true to "穿透输出 (Passthrough/Bitstream)").forEach { (value, label) ->
+                                TextButton(
+                                    onClick = { passthroughEnabled = value },
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = if (passthroughEnabled == value) MaterialTheme.colorScheme.primary else Color.White
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.defaultMinSize(minWidth = 50.dp, minHeight = 24.dp)
+                                ) {
+                                    Text(
+                                        label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (passthroughEnabled == value) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 }
                             }
                         }
 
-                        // Visual Volume Adjuster (Audio Processing overlay)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 12.dp)
-                        ) {
-                            val isMuted = volume == 0f
-                            IconButton(onClick = {
-                                if (isMuted) {
-                                    volume = if (lastVolumeBeforeMute > 0f) lastVolumeBeforeMute else 0.5f
-                                } else {
-                                    lastVolumeBeforeMute = volume
-                                    volume = 0f
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = if (isMuted) Icons.Default.VolumeOff 
-                                                  else if (volume < 0.3f) Icons.Default.VolumeMute
-                                                  else if (volume < 0.7f) Icons.Default.VolumeDown 
-                                                  else Icons.Default.VolumeUp,
-                                    contentDescription = "音量调节",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
+                        // Codec profiles status (AVS+, AVS2, DRA, AC3, PCM)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Audiotrack,
+                                contentDescription = "音轨解码",
+                                tint = if (avsPriorityEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("音频轨道解码: ", color = Color.LightGray, fontSize = 11.sp)
+                            TextButton(
+                                onClick = { avsPriorityEnabled = !avsPriorityEnabled },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = if (avsPriorityEnabled) MaterialTheme.colorScheme.primary else Color.LightGray
+                                ),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.defaultMinSize(minWidth = 50.dp, minHeight = 24.dp)
+                            ) {
+                                Text(
+                                    if (avsPriorityEnabled) "国标 AVS2/AVS+ & DRA/AC-3/PCM 双解码激活" else "基础解码引擎",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (avsPriorityEnabled) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
-                            Slider(
-                                value = volume,
-                                onValueChange = { volume = it },
-                                valueRange = 0f..1f,
-                                modifier = Modifier.width(80.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                                )
-                            )
-                            Text(
-                                text = "${(volume * 100).toInt()}%",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
                         }
                     }
 
-                    // Speed selectors
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("倍速播放: ", color = Color.White, fontSize = 12.sp)
-                        listOf(1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                            TextButton(
-                                onClick = { currentSpeed = speed },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = if (currentSpeed == speed) MaterialTheme.colorScheme.primary else Color.White
-                                )
+                    // Main Controls row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { onChannelSwitched(false) }) {
+                                Icon(Icons.Default.SkipPrevious, "上一个", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = { onChannelSwitched(true) }) {
+                                Icon(Icons.Default.SkipNext, "下一个", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            // Carousel Mode (多画面自动轮播) Button
+                            IconButton(
+                                onClick = { isCarouselEnabled = !isCarouselEnabled },
+                                modifier = Modifier.testTag("player_carousel_btn")
                             ) {
-                                Text(
-                                    "${speed}x",
-                                    fontSize = 13.sp,
-                                    fontWeight = if (currentSpeed == speed) FontWeight.Bold else FontWeight.Normal
+                                Icon(
+                                    imageVector = Icons.Default.Autorenew,
+                                    contentDescription = "多画面轮播",
+                                    tint = if (isCarouselEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
+                            }
+                            
+                            if (isCarouselEnabled) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text("轮播:", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    listOf(10, 30, 60).forEach { sec ->
+                                        TextButton(
+                                            onClick = { carouselIntervalSeconds = sec },
+                                            colors = ButtonDefaults.textButtonColors(
+                                                contentColor = if (carouselIntervalSeconds == sec) MaterialTheme.colorScheme.primary else Color.LightGray
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                            modifier = Modifier.defaultMinSize(minWidth = 28.dp, minHeight = 24.dp)
+                                        ) {
+                                            Text(
+                                                "${sec}秒",
+                                                fontSize = 10.sp,
+                                                fontWeight = if (carouselIntervalSeconds == sec) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Visual Volume Adjuster (Audio Processing overlay)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 12.dp)
+                            ) {
+                                val isMuted = volume == 0f
+                                IconButton(onClick = {
+                                    if (isMuted) {
+                                        volume = if (lastVolumeBeforeMute > 0f) lastVolumeBeforeMute else 0.5f
+                                    } else {
+                                        lastVolumeBeforeMute = volume
+                                        volume = 0f
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = if (isMuted) Icons.Default.VolumeOff 
+                                                      else if (volume < 0.3f) Icons.Default.VolumeMute
+                                                      else if (volume < 0.7f) Icons.Default.VolumeDown 
+                                                      else Icons.Default.VolumeUp,
+                                        contentDescription = "音量调节",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = volume,
+                                    onValueChange = { volume = it },
+                                    valueRange = 0f..1f,
+                                    modifier = Modifier.width(80.dp),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                                    )
+                                )
+                                Text(
+                                    text = "${(volume * 100).toInt()}%",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
+
+                        // Speed selectors
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("倍速播放: ", color = Color.White, fontSize = 12.sp)
+                            listOf(1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                                TextButton(
+                                    onClick = { currentSpeed = speed },
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = if (currentSpeed == speed) MaterialTheme.colorScheme.primary else Color.White
+                                    )
+                                ) {
+                                    Text(
+                                        "${speed}x",
+                                        fontSize = 13.sp,
+                                        fontWeight = if (currentSpeed == speed) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             }
                         }
                     }

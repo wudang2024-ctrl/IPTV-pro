@@ -1,0 +1,86 @@
+name: Build & Release IPTV APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradle Wrapper
+        run: chmod +x gradlew || true
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon || echo "No release signing configured yet, skipping release build"
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IPTV-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+  release:
+    name: Auto Release Tagged Build
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: IPTV-debug-apk
+          path: release-assets/
+
+      - name: Rename APK for Release
+        run: mv release-assets/app-debug.apk release-assets/StarIPTV_${{ github.ref_name }}_Debug.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/StarIPTV_${{ github.ref_name }}_Debug.apk
+          name: 星辰IPTV Release ${{ github.ref_name }}
+          body: |
+            ## 星辰IPTV 自动构建发布
+            
+            这是由 GitHub Actions 自动构建并发布的最新版本 APK。
+            
+            ### 主要功能
+            - 📺 **自适应大屏布局**：专为安卓盒子、智能电视 (D-pad 遥控) 以及手机优化。
+            - 🔌 **远程推流导入**：在同局域网内通过浏览器即可将 M3U 导入电视。
+            - ⏱️ **智能多画面轮播**：支持自动切换播放列表频道，畅享精彩节目。
+            - 🛡️ **家长监管与儿童锁**：保护家庭观影安全。
+            - ⚡ **硬解/软解双引擎切换**：完美适配不同盒子硬件，确保播放极致流畅。
+            
+            *提示：请直接在电视/盒子/手机端安装 `StarIPTV_xxx_Debug.apk` 即可开始观看！*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

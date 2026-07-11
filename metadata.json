@@ -1,0 +1,8 @@
+{
+  "name": "Remix: VisionBox IPTV",
+  "description": "Advanced Android TV player featuring M3U support, EPG, cloud sync, voice control, parental locks, and customizable viewing themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -58,7 +58,7 @@ jobs:
           echo "debug.keystore already exists."
         fi
 
-    # 步骤 6.5: 自动修改 App 内部版本号 (versionCode & versionName)
+    # 步骤 7: 自动修改 App 内部版本号 (versionCode & versionName)
     - name: Auto Set App Version
       run: |
         VERSION_CODE="${{ github.run_number }}"
@@ -74,31 +74,18 @@ jobs:
           sed -i -E "s/(versionName\s*=?\s*\")[^\"]+(\")/\1$VERSION_NAME\2/g" app/build.gradle.kts
         fi
 
-    # 步骤 6.6: 【新增】自动修补 MainApp.kt 中的 AnimatedVisibility 作用域编译错误
-    - name: Hotfix AnimatedVisibility Scope Error
-      run: |
-        FILE_PATH="app/src/main/java/com/example/ui/MainApp.kt"
-        if [ -f "$FILE_PATH" ]; then
-          echo "Applying hotfix to $FILE_PATH..."
-          # 将隐式作用域的 AnimatedVisibility( 替换为完全限定的全局方法，避开作用域冲突
-          sed -i 's/AnimatedVisibility(/androidx.compose.animation.AnimatedVisibility(/g' "$FILE_PATH"
-          echo "Hotfix applied successfully."
-        else
-          echo "Warning: $FILE_PATH not found, skipping hotfix."
-        fi
-
-    # 步骤 7: 执行 Gradle 编译命令打包 APK
+    # 步骤 8: 执行 Gradle 编译命令打包 APK
     - name: Build with Gradle
       run: ./gradlew assembleDebug --no-daemon
 
-    # 步骤 8: 收集构建完成的 APK 存入 Actions 临时缓存中
+    # 步骤 9: 收集构建完成的 APK 存入 Actions 临时缓存中
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
         path: app/build/outputs/apk/debug/*.apk
 
-    # 步骤 9: 自动在 GitHub 创建 Release 并上传生成的 APK 文件
+    # 步骤 10: 自动在 GitHub 创建 Release 并上传生成的 APK 文件
     - name: Create GitHub Release & Upload APK
       uses: softprops/action-gh-release@v2
       with:
@@ -109,6 +96,14 @@ jobs:
           本项目已通过 GitHub Actions 自动构建成功！
           
           * **版本代码 (Version Code):** `${{ github.run_number }}`
+          * **版本名称 (Version Name):** `1.0.${{ github.run_number }}`
+          * **构建分支:** `${{ github.ref_name }}`
+          * **提交哈希:** `${{ github.sha }}`
+        draft: false
+        prerelease: false
+        files: app/build/outputs/apk/debug/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          * **版本代码 (Version Code):** `${{ github.run_number }}`
           * **版本名称 (Version Name):** `1.0.${{ github.run_number }}`
           * **构建分支:** `${{ github.ref_name }}`
           * **提交哈希:** `${{ github.sha }}`

@@ -413,99 +413,16 @@ fun TVBoxAdaptiveLayout(
                     )
 
                 // Left program selection list overlay in minimalist/fullscreen mode
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showLeftOverlayChannels,
-                    enter = slideInHorizontally(initialOffsetX = { -it }),
-                    exit = slideOutHorizontally(targetOffsetX = { -it }),
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .fillMaxHeight()
-                        .width(320.dp)
-                ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.92f))
-                                .clickable(enabled = false) {} // block clicks
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "节目列表",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    IconButton(onClick = { showLeftOverlayChannels = false }) {
-                                        Icon(Icons.Default.Close, "关闭", tint = Color.White)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Channels List
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxHeight(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(channels) { channel ->
-                                        val isPlayingNow = activeChannel?.id == channel.id
-                                        Card(
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = if (isPlayingNow) MaterialTheme.colorScheme.primaryContainer
-                                                else Color.DarkGray.copy(alpha = 0.3f)
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    viewModel.selectChannel(channel)
-                                                    showLeftOverlayChannels = false
-                                                }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(35.dp)
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(Color.Gray),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (channel.logoUrl.isNotEmpty()) {
-                                                        AsyncImage(
-                                                            model = channel.logoUrl,
-                                                            contentDescription = channel.name,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            contentScale = ContentScale.Fit
-                                                        )
-                                                    } else {
-                                                        Icon(Icons.Default.Tv, null, tint = Color.LightGray)
-                                                    }
-                                                }
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Text(
-                                                    text = channel.name,
-                                                    color = Color.White,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                LeftChannelsOverlay(
+                    show = showLeftOverlayChannels,
+                    onClose = { showLeftOverlayChannels = false },
+                    channels = channels,
+                    activeChannel = activeChannel,
+                    onSelectChannel = { channel ->
+                        viewModel.selectChannel(channel)
+                        showLeftOverlayChannels = false
                     }
+                )
 
                     // Floating toggle menu button if menu is hidden or in fullscreen
                     if (!showTvMenu || isTvFullscreen) {
@@ -1442,4 +1359,106 @@ private fun FlowRow(
         horizontalArrangement = horizontalArrangement,
         content = { content() }
     )
+}
+
+@Composable
+fun BoxScope.LeftChannelsOverlay(
+    show: Boolean,
+    onClose: () -> Unit,
+    channels: List<Channel>,
+    activeChannel: Channel?,
+    onSelectChannel: (Channel) -> Unit
+) {
+    AnimatedVisibility(
+        visible = show,
+        enter = slideInHorizontally(initialOffsetX = { -it }),
+        exit = slideOutHorizontally(targetOffsetX = { -it }),
+        modifier = Modifier
+            .align(Alignment.CenterStart)
+            .fillMaxHeight()
+            .width(320.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f))
+                .clickable(enabled = false) {} // block clicks
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "节目列表",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, "关闭", tint = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Channels List
+                LazyColumn(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(channels) { channel ->
+                        val isPlayingNow = activeChannel?.id == channel.id
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isPlayingNow) MaterialTheme.colorScheme.primaryContainer
+                                else Color.DarkGray.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelectChannel(channel)
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(35.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Gray),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (channel.logoUrl.isNotEmpty()) {
+                                        AsyncImage(
+                                            model = channel.logoUrl,
+                                            contentDescription = channel.name,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Tv, null, tint = Color.LightGray)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = channel.name,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

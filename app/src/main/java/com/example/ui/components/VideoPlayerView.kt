@@ -162,15 +162,38 @@ fun VideoPlayerView(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
-        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
+        
+        // Optimize TS & ADTS extractor flags to parse MPEG-TS / LATM AAC / MPEG Audio layer 1/2 channels properly
+        // Using raw integer flags to bypass version-dependent internal package import variances:
+        // - FLAG_ALLOW_NON_KEYFRAME_ONSETS = 1
+        // - FLAG_DETECT_ACCESS_UNITS = 8
+        // - FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS = 64
+        // - ADTS FLAG_ENABLE_CONSTANT_BITRATE_SEEKING = 1
+        val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory().apply {
+            setTsExtractorFlags(1 or 8 or 64)
+            setAdtsExtractorFlags(1)
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory, extractorsFactory)
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
+        // Configure a robust LoadControl to handle bursty network packets of UDP multicast streams
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                15000, // minBufferMs: 15 seconds of minimum buffer depth to ensure continuous audio output
+                50000, // maxBufferMs: 50 seconds max buffer size
+                1500,  // bufferForPlaybackMs: 1.5 seconds before starting playback
+                3000   // bufferForPlaybackAfterRebufferMs: 3 seconds before resuming after rebuffering
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true) // Enable automatic audio focus and routing
             .build().apply {
                 playWhenReady = true

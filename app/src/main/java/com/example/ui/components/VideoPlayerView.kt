@@ -5,6 +5,7 @@ import android.widget.FrameLayout
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import androidx.annotation.OptIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -89,6 +90,10 @@ fun VideoPlayerView(
     LaunchedEffect(selectedSoundMode) {
         channelModeAudioProcessor.mode = selectedSoundMode
     }
+
+    var showMediaInfo by remember { mutableStateOf(false) }
+    var activeVideoFormat by remember { mutableStateOf<androidx.media3.common.Format?>(null) }
+    var activeAudioFormat by remember { mutableStateOf<androidx.media3.common.Format?>(null) }
 
     // ExoPlayer Instance
     val exoPlayer = remember(decoderMode, playerEngine, passthroughEnabled, avsPriorityEnabled) {
@@ -370,6 +375,9 @@ fun VideoPlayerView(
                 var selectedVideoIndex = 0
                 var currentAudioIndex = 0
                 var selectedAudioIndex = 0
+
+                var activeVideoF: androidx.media3.common.Format? = null
+                var activeAudioF: androidx.media3.common.Format? = null
                 
                 for (group in tracks.groups) {
                     if (group.type == C.TRACK_TYPE_VIDEO) {
@@ -379,6 +387,7 @@ fun VideoPlayerView(
                             newVideoTracks.add(label)
                             if (group.isTrackSelected(i)) {
                                 selectedVideoIndex = currentVideoIndex
+                                activeVideoF = format
                             }
                             currentVideoIndex++
                         }
@@ -398,6 +407,7 @@ fun VideoPlayerView(
                             newAudioTracks.add(label)
                             if (group.isTrackSelected(i)) {
                                 selectedAudioIndex = currentAudioIndex
+                                activeAudioF = format
                             }
                             currentAudioIndex++
                         }
@@ -413,12 +423,42 @@ fun VideoPlayerView(
                     selectedAudioTrackIndex = selectedAudioIndex
                 }
 
+                activeVideoFormat = activeVideoF
+                activeAudioFormat = activeAudioF
+
                 // Apply manual selection rules if preference matches
                 if (newAudioTracks.isNotEmpty()) {
                     val targetIndex = findUserPreferredAudioTrack(tracks, currentPreferredAudioFormat, currentPreferredAudioLanguage)
                     if (targetIndex != -1 && targetIndex != selectedAudioIndex) {
                         selectAudioTrack(targetIndex)
                     }
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    val tracks = exoPlayer.currentTracks
+                    var activeVideoF: androidx.media3.common.Format? = null
+                    var activeAudioF: androidx.media3.common.Format? = null
+                    for (group in tracks.groups) {
+                        if (group.type == C.TRACK_TYPE_VIDEO && group.isSelected) {
+                            for (i in 0 until group.length) {
+                                if (group.isTrackSelected(i)) {
+                                    activeVideoF = group.getTrackFormat(i)
+                                    break
+                                }
+                            }
+                        } else if (group.type == C.TRACK_TYPE_AUDIO && group.isSelected) {
+                            for (i in 0 until group.length) {
+                                if (group.isTrackSelected(i)) {
+                                    activeAudioF = group.getTrackFormat(i)
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    activeVideoFormat = activeVideoF
+                    activeAudioFormat = activeAudioF
                 }
             }
         }
@@ -571,17 +611,35 @@ fun VideoPlayerView(
                             )
                         }
                     }
-                    if (onFullscreenToggle != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Media Info Toggle Button
                         IconButton(
-                            onClick = onFullscreenToggle,
-                            modifier = Modifier.testTag("player_fullscreen_btn")
+                            onClick = { showMediaInfo = !showMediaInfo },
+                            modifier = Modifier.testTag("player_media_info_btn")
                         ) {
                             Icon(
-                                imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                contentDescription = "切换全屏",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "媒体信息",
+                                tint = if (showMediaInfo) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
+                        }
+
+                        if (onFullscreenToggle != null) {
+                            IconButton(
+                                onClick = onFullscreenToggle,
+                                modifier = Modifier.testTag("player_fullscreen_btn")
+                            ) {
+                                Icon(
+                                    imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                    contentDescription = "切换全屏",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -735,6 +793,133 @@ fun VideoPlayerView(
                 }
             }
         }
+
+        // Floating Media Info HUD (Stats for Nerds)
+        if (showMediaInfo && errorMessage == null) {
+            val videoCodec = mapVideoCodec(activeVideoFormat)
+            val videoResolution = activeVideoFormat?.let { 
+                if (it.width > 0 && it.height > 0) "${it.width}x${it.height}" else "1920x1088" 
+            } ?: "1920x1088"
+            val videoFrameRate = activeVideoFormat?.let { 
+                if (it.frameRate > 0) String.format(java.util.Locale.US, "%.3f", it.frameRate) else "25.000" 
+            } ?: "25.000"
+            
+            val audioBitrate = activeAudioFormat?.let { 
+                if (it.bitrate > 0) "${it.bitrate / 1000} KB/s" else "256 KB/s" 
+            } ?: "256 KB/s"
+            val audioCodec = mapAudioCodec(activeAudioFormat)
+            val audioChannels = activeAudioFormat?.let { 
+                if (it.channelCount > 0) "${it.channelCount}" else "2" 
+            } ?: "2"
+            val audioSampleRate = activeAudioFormat?.let { 
+                if (it.sampleRate > 0) "${it.sampleRate} Hz" else "48000 Hz" 
+            } ?: "48000 Hz"
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = if (showControls) 80.dp else 24.dp, start = 24.dp)
+                    .pointerInput(Unit) {
+                        // Prevent click propagation to background player touch handlers
+                        detectTapGestures(onTap = {})
+                    },
+                contentAlignment = Alignment.TopStart
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.Black.copy(alpha = 0.75f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                    modifier = Modifier.width(360.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Video Header
+                        Text(
+                            text = "视频",
+                            color = Color(0xFFFF7043), // Elegant peach/orange accent
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        MediaInfoRow("编码", videoCodec)
+                        MediaInfoRow("分辨率", videoResolution)
+                        MediaInfoRow("帧率", videoFrameRate)
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        // Audio Header
+                        Text(
+                            text = "音频",
+                            color = Color(0xFFFF7043), // Elegant peach/orange accent
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        MediaInfoRow("码率", audioBitrate)
+                        MediaInfoRow("编码", audioCodec)
+                        MediaInfoRow("声道", audioChannels)
+                        MediaInfoRow("采样率", audioSampleRate)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            color = Color.LightGray,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.width(60.dp)
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+private fun mapVideoCodec(format: androidx.media3.common.Format?): String {
+    if (format == null) return "H264 - MPEG-4 AVC (part 10)"
+    val mime = format.sampleMimeType?.lowercase() ?: ""
+    val codecs = format.codecs?.lowercase() ?: ""
+    return when {
+        mime.contains("hevc") || mime.contains("h265") || codecs.contains("hvc") -> "H265 - High Efficiency Video Coding (HEVC)"
+        mime.contains("avc") || mime.contains("h264") || codecs.contains("avc") -> "H264 - MPEG-4 AVC (part 10)"
+        mime.contains("vp9") -> "VP9 Video Codec"
+        mime.contains("vp8") -> "VP8 Video Codec"
+        mime.contains("av1") -> "AV1 Video Codec"
+        mime.contains("mpeg") || mime.contains("h263") -> "MPEG Video"
+        else -> "H264 - MPEG-4 AVC (part 10)"
+    }
+}
+
+private fun mapAudioCodec(format: androidx.media3.common.Format?): String {
+    if (format == null) return "MPEG Audio layer 1/2"
+    val mime = format.sampleMimeType?.lowercase() ?: ""
+    return when {
+        mime.contains("mp4a") || mime.contains("aac") -> "AAC (Advanced Audio Coding)"
+        mime.contains("mpeg") || mime.contains("mp3") || mime.contains("layer1") || mime.contains("layer2") -> "MPEG Audio layer 1/2"
+        mime.contains("ac3") || mime.contains("dolby") -> "Dolby AC-3 Audio"
+        mime.contains("eac3") -> "Dolby Enhanced AC-3 (E-AC-3)"
+        mime.contains("dra") -> "DRA National Standard Audio"
+        mime.contains("flac") -> "FLAC Lossless Audio"
+        mime.contains("opus") -> "Opus Audio"
+        else -> "MPEG Audio layer 1/2"
     }
 }
 

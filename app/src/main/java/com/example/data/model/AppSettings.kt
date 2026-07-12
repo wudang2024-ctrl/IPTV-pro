@@ -22,5 +22,12 @@ data class AppSettings(
     val minimalistModeEnabled: Boolean = false,
     val preferredAudioLanguage: String = "Auto",
     val preferredAudioFormat: String = "Auto",
-    val autoSelectBestAudio: Boolean = true
+    val autoSelectBestAudio: Boolean = true,
+    val volumeBoost: Float = 1.0f,
+    val aspectRatio: String = "Auto",
+    val videoRotation: Float = 0f,
+    val bufferPresetMs: Int = 15000,
+    val channelMode: String = "Stereo",
+    val passthroughEnabled: Boolean = false,
+    val audioVideoDelayMs: Int = 0
 )

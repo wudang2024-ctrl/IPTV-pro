@@ -2,6 +2,8 @@ package com.example.ui.components
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,6 +74,14 @@ fun VideoPlayerView(
     var passthroughEnabled by remember { mutableStateOf(false) }
     var avsPriorityEnabled by remember { mutableStateOf(true) }
 
+    val channelModeAudioProcessor = remember { ChannelModeAudioProcessor() }
+    var selectedSoundMode by remember { mutableStateOf(ChannelModeAudioProcessor.Mode.STEREO) }
+
+    // Sync selectedSoundMode to the processor
+    LaunchedEffect(selectedSoundMode) {
+        channelModeAudioProcessor.mode = selectedSoundMode
+    }
+
     // ExoPlayer Instance
     val exoPlayer = remember(decoderMode, playerEngine, passthroughEnabled, avsPriorityEnabled) {
         val renderersFactory = object : DefaultRenderersFactory(context) {
@@ -120,6 +130,7 @@ fun VideoPlayerView(
                 val audioSink = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
                     .setAudioCapabilities(audioCapabilities)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(channelModeAudioProcessor))
                     .build()
                 return audioSink
             }
@@ -655,6 +666,58 @@ fun VideoPlayerView(
                         }
                     }
 
+                    // Sound Mode Selection Row (立体声 / 双声道, 单声道, 左声道, 右声道, 环绕声)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "声道模式",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("声道与环绕声: ", color = Color.LightGray, fontSize = 11.sp)
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val modes = listOf(
+                                ChannelModeAudioProcessor.Mode.STEREO to "双声道 / 立体声",
+                                ChannelModeAudioProcessor.Mode.MONO to "单声道",
+                                ChannelModeAudioProcessor.Mode.LEFT_ONLY to "左声道",
+                                ChannelModeAudioProcessor.Mode.RIGHT_ONLY to "右声道",
+                                ChannelModeAudioProcessor.Mode.SURROUND to "5.1/7.1 环绕声"
+                            )
+                            items(modes.size) { index ->
+                                val (m, label) = modes[index]
+                                val isSelected = selectedSoundMode == m
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else Color.White.copy(alpha = 0.12f)
+                                        )
+                                        .clickable { selectedSoundMode = m }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 10.sp,
+                                        color = Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Main Controls row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -775,5 +838,140 @@ fun VideoPlayerView(
                 }
             }
         }
+    }
+}
+
+@UnstableApi
+class ChannelModeAudioProcessor : androidx.media3.common.audio.AudioProcessor {
+    enum class Mode {
+        STEREO,       // 双声道/立体声
+        MONO,         // 单声道
+        LEFT_ONLY,    // 左声道
+        RIGHT_ONLY,   // 右声道
+        SURROUND      // 环绕声
+    }
+
+    var mode: Mode = Mode.STEREO
+
+    private var pendingOutput: ByteBuffer = androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+    private var outputBuffer: ByteBuffer = androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+    private var inputAudioFormat: androidx.media3.common.audio.AudioProcessor.AudioFormat = 
+        androidx.media3.common.audio.AudioProcessor.AudioFormat.NOT_SET
+    private var outputAudioFormat: androidx.media3.common.audio.AudioProcessor.AudioFormat = 
+        androidx.media3.common.audio.AudioProcessor.AudioFormat.NOT_SET
+    private var inputEnded: Boolean = false
+
+    override fun configure(inputAudioFormat: androidx.media3.common.audio.AudioProcessor.AudioFormat): androidx.media3.common.audio.AudioProcessor.AudioFormat {
+        this.inputAudioFormat = inputAudioFormat
+        outputAudioFormat = inputAudioFormat
+        return outputAudioFormat
+    }
+
+    override fun isActive(): Boolean {
+        return inputAudioFormat != androidx.media3.common.audio.AudioProcessor.AudioFormat.NOT_SET
+    }
+
+    override fun queueInput(inputBuffer: ByteBuffer) {
+        if (!inputBuffer.hasRemaining()) return
+
+        val position = inputBuffer.position()
+        val limit = inputBuffer.limit()
+        val size = limit - position
+
+        // We only process PCM_16BIT with 2 or more channels
+        if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT && inputAudioFormat.channelCount >= 2) {
+            if (outputBuffer.capacity() < size) {
+                outputBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
+            } else {
+                outputBuffer.clear()
+            }
+
+            val input = inputBuffer.asShortBuffer()
+            val output = outputBuffer.asShortBuffer()
+
+            val channelCount = inputAudioFormat.channelCount
+            val sampleCount = (size / 2) / channelCount
+
+            for (i in 0 until sampleCount) {
+                val left = input.get(i * channelCount)
+                val right = input.get(i * channelCount + 1)
+
+                when (mode) {
+                    Mode.STEREO -> {
+                        for (c in 0 until channelCount) {
+                            output.put(input.get(i * channelCount + c))
+                        }
+                    }
+                    Mode.MONO -> {
+                        val monoSample = ((left.toInt() + right.toInt()) / 2).toShort()
+                        output.put(monoSample) // L
+                        output.put(monoSample) // R
+                        for (c in 2 until channelCount) {
+                            output.put(input.get(i * channelCount + c))
+                        }
+                    }
+                    Mode.LEFT_ONLY -> {
+                        output.put(left) // L
+                        output.put(left) // R
+                        for (c in 2 until channelCount) {
+                            output.put(input.get(i * channelCount + c))
+                        }
+                    }
+                    Mode.RIGHT_ONLY -> {
+                        output.put(right) // L
+                        output.put(right) // R
+                        for (c in 2 until channelCount) {
+                            output.put(input.get(i * channelCount + c))
+                        }
+                    }
+                    Mode.SURROUND -> {
+                        // Standard unaltered passthrough
+                        for (c in 0 until channelCount) {
+                            output.put(input.get(i * channelCount + c))
+                        }
+                    }
+                }
+            }
+
+            inputBuffer.position(limit)
+            outputBuffer.limit(size)
+            pendingOutput = outputBuffer
+        } else {
+            // Passthrough for non-PCM16 or mono input
+            if (outputBuffer.capacity() < size) {
+                outputBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
+            } else {
+                outputBuffer.clear()
+            }
+            outputBuffer.put(inputBuffer)
+            outputBuffer.flip()
+            pendingOutput = outputBuffer
+        }
+    }
+
+    override fun queueEndOfStream() {
+        inputEnded = true
+    }
+
+    override fun getOutput(): ByteBuffer {
+        val output = pendingOutput
+        pendingOutput = androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+        return output
+    }
+
+    override fun isEnded(): Boolean {
+        return inputEnded && pendingOutput == androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+    }
+
+    override fun flush() {
+        pendingOutput = androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+        inputEnded = false
+    }
+
+    override fun reset() {
+        flush()
+        outputBuffer = androidx.media3.common.audio.AudioProcessor.EMPTY_BUFFER
+        inputAudioFormat = androidx.media3.common.audio.AudioProcessor.AudioFormat.NOT_SET
+        outputAudioFormat = androidx.media3.common.audio.AudioProcessor.AudioFormat.NOT_SET
     }
 }

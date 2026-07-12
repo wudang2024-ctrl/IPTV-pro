@@ -205,8 +205,8 @@ fun VideoPlayerView(
                     uriLower.contains("avs+") || uriLower.contains(".avs") -> {
                         mediaItemBuilder.setMimeType("video/avs-video")
                     }
-                    uriLower.contains("shanghai.php") || uriLower.contains("id=mdy") || uriLower.contains(".ts") || uriLower.contains("mpegts") -> {
-                        // "shanghai.php?id=mdy" typically serves an IPTV multicast MPEG-TS format
+                    uriLower.contains("shanghai.php") || uriLower.contains("id=mdy") || uriLower.contains(".ts") || uriLower.contains("mpegts") || uriLower.contains("/udp/") || uriLower.contains("/rtp/") || uriLower.contains(":7088") || uriLower.contains(":4022") || uriLower.contains("/rtsp") -> {
+                        // "shanghai.php?id=mdy" and "/udp/..." multicast streams serve IPTV multicast MPEG-TS format
                         mediaItemBuilder.setMimeType(MimeTypes.VIDEO_MP2T)
                     }
                     uriLower.contains(".php") || uriLower.contains("php") || uriLower.contains("api") -> {

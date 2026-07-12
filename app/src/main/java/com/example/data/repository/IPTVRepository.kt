@@ -110,6 +110,14 @@ class IPTVRepository(private val context: Context) {
                 ),
                 Channel(
                     playlistId = playlistId,
+                    name = "上海组播源 (UDP测试)",
+                    logoUrl = "https://tvg.m3u.cl/logos/dongfang.png",
+                    streamUrl = "http://192.168.31.1:7088/udp/235.254.199.51:7980",
+                    category = "本地测试",
+                    isFavorite = true
+                ),
+                Channel(
+                    playlistId = playlistId,
                     name = "经典动漫大放送",
                     logoUrl = "https://tvg.m3u.cl/logos/anime.png",
                     streamUrl = "https://test-streams.mux.dev/pts_live/pts_live.m3u8",

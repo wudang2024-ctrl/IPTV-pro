@@ -92,18 +92,30 @@ fun MainApp(viewModel: IPTVViewModel = viewModel()) {
                 )
             }
 
+            var isFullscreen by remember { mutableStateOf(false) }
+
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val isWideScreen = maxWidth > 720.dp // Big Screen TV Box (usually 10-15+ inch adaptive)
 
                 if (isWideScreen) {
-                    TVBoxAdaptiveLayout(viewModel = viewModel)
+                    TVBoxAdaptiveLayout(
+                        viewModel = viewModel,
+                        isFullscreen = isFullscreen,
+                        onFullscreenChange = { isFullscreen = it }
+                    )
                 } else {
-                    MobileAdaptiveLayout(viewModel = viewModel)
+                    MobileAdaptiveLayout(
+                        viewModel = viewModel,
+                        isFullscreen = isFullscreen,
+                        onFullscreenChange = { isFullscreen = it }
+                    )
                 }
             }
 
-            // Global Voice Assistant overlay
-            VoiceAssistantFloatingPanel(viewModel = viewModel)
+            // Global Voice Assistant overlay (hidden in fullscreen)
+            if (!isFullscreen) {
+                VoiceAssistantFloatingPanel(viewModel = viewModel)
+            }
         }
     }
 }
@@ -112,7 +124,11 @@ fun MainApp(viewModel: IPTVViewModel = viewModel()) {
 // TV Box Adaptive Layout (Optimize for Big Screens, D-pad, 10-15 inch)
 // -------------------------------------------------------------
 @Composable
-fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
+fun TVBoxAdaptiveLayout(
+    viewModel: IPTVViewModel,
+    isFullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit
+) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val channels by viewModel.currentChannels.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -127,18 +143,18 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
     var isMultiScreenMode by remember { mutableStateOf(false) }
     val multiScreenList by viewModel.multiScreenChannels.collectAsStateWithLifecycle()
 
-    var isTvFullscreen by remember { mutableStateOf(false) }
+    val isTvFullscreen = isFullscreen
     var showTvMenu by remember(settings.minimalistModeEnabled) { mutableStateOf(!settings.minimalistModeEnabled) }
     var showLeftOverlayChannels by remember { mutableStateOf(false) }
 
     // Automatic fullscreen after 5 seconds of active streaming
     LaunchedEffect(activeChannel) {
         if (activeChannel != null && settings.autoFullscreenEnabled) {
-            isTvFullscreen = false
+            onFullscreenChange(false)
             delay(5000)
-            isTvFullscreen = true
+            onFullscreenChange(true)
         } else {
-            isTvFullscreen = false
+            onFullscreenChange(false)
         }
     }
 
@@ -395,7 +411,7 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
                                 }
                             }
                         },
-                        onFullscreenToggle = { isTvFullscreen = !isTvFullscreen },
+                        onFullscreenToggle = { onFullscreenChange(!isTvFullscreen) },
                         isFullscreen = isTvFullscreen,
                         onConfirmClick = { showLeftOverlayChannels = !showLeftOverlayChannels },
                         modifier = Modifier.fillMaxSize()
@@ -500,7 +516,7 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
                     if (!showTvMenu || isTvFullscreen) {
                         IconButton(
                             onClick = {
-                                isTvFullscreen = false
+                                onFullscreenChange(false)
                                 showTvMenu = true
                             },
                             modifier = Modifier
@@ -729,7 +745,11 @@ fun TVMultiScreenGrid(
 // -------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MobileAdaptiveLayout(viewModel: IPTVViewModel) {
+fun MobileAdaptiveLayout(
+    viewModel: IPTVViewModel,
+    isFullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit
+) {
     val activeChannel by viewModel.activeChannel.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val channels by viewModel.currentChannels.collectAsStateWithLifecycle()
@@ -742,7 +762,7 @@ fun MobileAdaptiveLayout(viewModel: IPTVViewModel) {
 
     var selectedTab by remember { mutableStateOf(0) }
     var showImportDialog by remember { mutableStateOf(false) }
-    var isMobileFullscreen by remember { mutableStateOf(false) }
+    val isMobileFullscreen = isFullscreen
     var showLeftOverlayChannels by remember { mutableStateOf(false) }
 
     LaunchedEffect(isMobileFullscreen) {
@@ -804,7 +824,7 @@ fun MobileAdaptiveLayout(viewModel: IPTVViewModel) {
                             }
                         }
                     },
-                    onFullscreenToggle = { isMobileFullscreen = false },
+                    onFullscreenToggle = { onFullscreenChange(false) },
                     isFullscreen = true,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -844,7 +864,7 @@ fun MobileAdaptiveLayout(viewModel: IPTVViewModel) {
                                     }
                                 }
                             },
-                            onFullscreenToggle = { isMobileFullscreen = true },
+                            onFullscreenToggle = { onFullscreenChange(true) },
                             isFullscreen = false,
                             modifier = Modifier.fillMaxSize()
                         )

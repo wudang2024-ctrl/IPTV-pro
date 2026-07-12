@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -227,9 +229,99 @@ fun VideoPlayerView(
         }
     }
 
-    // Handle lifecycle
+    // Track selection states (Video Track 1 & Audio Track)
+    var videoTracks by remember { mutableStateOf(listOf("视频轨 1 (1080P)", "视频轨 2 (720P)")) }
+    var selectedVideoTrackIndex by remember { mutableStateOf(0) }
+    var audioTracks by remember { mutableStateOf(listOf("默认音轨 (PCM)", "DRA 音轨 (国标)", "杜比音轨 (AC-3)")) }
+    var selectedAudioTrackIndex by remember { mutableStateOf(0) }
+
+    fun selectVideoTrack(index: Int) {
+        selectedVideoTrackIndex = index
+        try {
+            val tracks = exoPlayer.currentTracks
+            var trackCounter = 0
+            for (group in tracks.groups) {
+                if (group.type == C.TRACK_TYPE_VIDEO) {
+                    for (i in 0 until group.length) {
+                        if (trackCounter == index) {
+                            val newParams = exoPlayer.trackSelectionParameters.buildUpon()
+                                .setOverrideForType(
+                                    androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i)
+                                )
+                                .build()
+                            exoPlayer.trackSelectionParameters = newParams
+                            return
+                        }
+                        trackCounter++
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun selectAudioTrack(index: Int) {
+        selectedAudioTrackIndex = index
+        try {
+            val tracks = exoPlayer.currentTracks
+            var trackCounter = 0
+            for (group in tracks.groups) {
+                if (group.type == C.TRACK_TYPE_AUDIO) {
+                    for (i in 0 until group.length) {
+                        if (trackCounter == index) {
+                            val newParams = exoPlayer.trackSelectionParameters.buildUpon()
+                                .setOverrideForType(
+                                    androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i)
+                                )
+                                .build()
+                            exoPlayer.trackSelectionParameters = newParams
+                            return
+                        }
+                        trackCounter++
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Handle lifecycle and tracks changed listener
     DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val newVideoTracks = mutableListOf<String>()
+                val newAudioTracks = mutableListOf<String>()
+                
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_VIDEO) {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val label = format.label ?: "视频轨 ${newVideoTracks.size + 1} (${format.width}x${format.height})"
+                            newVideoTracks.add(label)
+                        }
+                    } else if (group.type == C.TRACK_TYPE_AUDIO) {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val language = format.language?.let { " [$it]" } ?: ""
+                            val label = format.label ?: "音频轨 ${newAudioTracks.size + 1}${language}"
+                            newAudioTracks.add(label)
+                        }
+                    }
+                }
+                
+                if (newVideoTracks.isNotEmpty()) {
+                    videoTracks = newVideoTracks
+                }
+                if (newAudioTracks.isNotEmpty()) {
+                    audioTracks = newAudioTracks
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
         onDispose {
+            exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
     }
@@ -421,7 +513,7 @@ fun VideoPlayerView(
                         // Passthrough toggle
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.SettingsVoice,
+                                imageVector = Icons.Default.Settings,
                                 contentDescription = "声音穿透",
                                 tint = if (passthroughEnabled) MaterialTheme.colorScheme.primary else Color.White,
                                 modifier = Modifier.size(16.dp)
@@ -469,6 +561,96 @@ fun VideoPlayerView(
                                     fontSize = 11.sp,
                                     fontWeight = if (avsPriorityEnabled) FontWeight.Bold else FontWeight.Normal
                                 )
+                            }
+                        }
+                    }
+
+                    // Video Track 1 and Audio Track Selector Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Video tracks selector
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Videocam,
+                                contentDescription = "视频轨",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("视频轨道: ", color = Color.LightGray, fontSize = 11.sp)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(videoTracks.size) { index ->
+                                    val isSelected = selectedVideoTrackIndex == index
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.White.copy(alpha = 0.12f)
+                                            )
+                                            .clickable { selectVideoTrack(index) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = videoTracks[index],
+                                            fontSize = 10.sp,
+                                            color = Color.White,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Audio tracks selector
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Hearing,
+                                contentDescription = "音轨",
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("音频轨道: ", color = Color.LightGray, fontSize = 11.sp)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(audioTracks.size) { index ->
+                                    val isSelected = selectedAudioTrackIndex == index
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.secondary
+                                                else Color.White.copy(alpha = 0.12f)
+                                            )
+                                            .clickable { selectAudioTrack(index) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = audioTracks[index],
+                                            fontSize = 10.sp,
+                                            color = Color.White,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

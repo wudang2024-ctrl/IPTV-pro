@@ -111,11 +111,6 @@ fun MainApp(viewModel: IPTVViewModel = viewModel()) {
                     )
                 }
             }
-
-            // Global Voice Assistant overlay (hidden in fullscreen)
-            if (!isFullscreen) {
-                VoiceAssistantFloatingPanel(viewModel = viewModel)
-            }
         }
     }
 }
@@ -1240,7 +1235,7 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val engines = listOf("ExoPlayer", "IjkPlayer", "MpvPlayer")
+                    val engines = listOf("ExoPlayer", "IjkPlayer", "MpvPlayer", "VlcPlayer")
                     engines.forEach { eng ->
                         val isSelected = settings.playerEngine == eng
                         Button(
@@ -1251,16 +1246,18 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                             ),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("engine_btn_$eng")
+                                .testTag("engine_btn_$eng"),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = when (eng) {
                                     "ExoPlayer" -> "EXO 核心"
                                     "IjkPlayer" -> "Ijk 核心"
                                     "MpvPlayer" -> "Mpv 核心"
+                                    "VlcPlayer" -> "VLC 核心"
                                     else -> eng
                                 },
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1322,120 +1319,6 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                 }
             }
         }
-    }
-}
-
-// -------------------------------------------------------------
-// Voice Assistant Floating Button & Modal (Voice command simulator)
-// -------------------------------------------------------------
-@Composable
-fun VoiceAssistantFloatingPanel(viewModel: IPTVViewModel) {
-    var showDialog by remember { mutableStateOf(false) }
-    val voiceFeedback by viewModel.voiceFeedback.collectAsStateWithLifecycle()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-    ) {
-        // Voice assistant trigger button (FAB style)
-        FloatingActionButton(
-            onClick = { showDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 60.dp) // Offset above bottom navbar
-                .testTag("voice_mic_btn"),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(Icons.Default.Mic, "语音控制")
-        }
-    }
-
-    if (showDialog) {
-        var commandText by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = {
-                showDialog = false
-                viewModel.clearVoiceFeedback()
-            },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Mic, "AI", tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("智能语音控制助手")
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        "在电视大屏或手机上，你可以输入或点击下方预设的语音指令，控制频道切换和皮肤更换！",
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-
-                    OutlinedTextField(
-                        value = commandText,
-                        onValueChange = { commandText = it },
-                        placeholder = { Text("说点什么，比如：播放 CCTV-1") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Feedbacks
-                    voiceFeedback?.let { feedback ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .padding(10.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                        ) {
-                            Text(
-                                text = feedback,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    // Presets
-                    Text("您还可以直接点击下方快捷指令试一试：", fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                    val presets = listOf("CCTV-1", "CCTV-6", "下一个频道", "切换赛博朋克主题", "切换深色主题")
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        presets.forEach { preset ->
-                            SuggestionChip(
-                                onClick = {
-                                    commandText = preset
-                                    viewModel.handleVoiceCommand(preset)
-                                },
-                                label = { Text(preset, fontSize = 11.sp) }
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (commandText.isNotEmpty()) {
-                        viewModel.handleVoiceCommand(commandText)
-                    }
-                }) {
-                    Text("执行口令")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDialog = false
-                    viewModel.clearVoiceFeedback()
-                }) {
-                    Text("关闭")
-                }
-            }
-        )
     }
 }
 

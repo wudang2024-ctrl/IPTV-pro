@@ -411,17 +411,18 @@ fun TVBoxAdaptiveLayout(
                         onConfirmClick = { showLeftOverlayChannels = !showLeftOverlayChannels },
                         modifier = Modifier.fillMaxSize()
                     )
+                }
 
-                    // Left program selection list overlay in minimalist/fullscreen mode
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showLeftOverlayChannels,
-                        enter = slideInHorizontally(initialOffsetX = { -it }),
-                        exit = slideOutHorizontally(targetOffsetX = { -it }),
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxHeight()
-                            .width(320.dp)
-                    ) {
+                // Left program selection list overlay in minimalist/fullscreen mode
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showLeftOverlayChannels,
+                    enter = slideInHorizontally(initialOffsetX = { -it }),
+                    exit = slideOutHorizontally(targetOffsetX = { -it }),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .width(320.dp)
+                ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -537,7 +538,6 @@ fun TVBoxAdaptiveLayout(
                         Icon(Icons.Default.Dashboard, "开启多画面", tint = Color.White)
                     }
                 }
-            }
 
             // EPG Section
             if (!isTvFullscreen) {

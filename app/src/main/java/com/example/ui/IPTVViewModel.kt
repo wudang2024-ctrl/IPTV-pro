@@ -232,6 +232,27 @@ class IPTVViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updatePreferredAudioLanguage(lang: String) {
+        viewModelScope.launch {
+            val s = settings.value.copy(preferredAudioLanguage = lang)
+            repository.appSettingsDao.saveSettings(s)
+        }
+    }
+
+    fun updatePreferredAudioFormat(fmt: String) {
+        viewModelScope.launch {
+            val s = settings.value.copy(preferredAudioFormat = fmt)
+            repository.appSettingsDao.saveSettings(s)
+        }
+    }
+
+    fun updateAutoSelectBestAudio(enabled: Boolean) {
+        viewModelScope.launch {
+            val s = settings.value.copy(autoSelectBestAudio = enabled)
+            repository.appSettingsDao.saveSettings(s)
+        }
+    }
+
     // Multi-screen / Grid features
     fun addToMultiScreen(channel: Channel) {
         val current = _multiScreenChannels.value.toMutableList()

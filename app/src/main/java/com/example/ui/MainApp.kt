@@ -391,6 +391,9 @@ fun TVBoxAdaptiveLayout(
                         decoderMode = settings.decoder,
                         playerEngine = settings.playerEngine,
                         minimalistMode = settings.minimalistModeEnabled || isTvFullscreen,
+                        preferredAudioLanguage = settings.preferredAudioLanguage,
+                        preferredAudioFormat = settings.preferredAudioFormat,
+                        autoSelectBestAudio = settings.autoSelectBestAudio,
                         onChannelSwitched = { isNext ->
                             val list = channels
                             val active = activeChannel
@@ -625,6 +628,9 @@ fun TVMultiScreenGrid(
                             decoderMode = settings.decoder,
                             playerEngine = settings.playerEngine,
                             minimalistMode = settings.minimalistModeEnabled,
+                            preferredAudioLanguage = settings.preferredAudioLanguage,
+                            preferredAudioFormat = settings.preferredAudioFormat,
+                            autoSelectBestAudio = settings.autoSelectBestAudio,
                             modifier = Modifier.fillMaxSize()
                         )
                         Row(
@@ -721,6 +727,9 @@ fun MobileAdaptiveLayout(
                     decoderMode = settings.decoder,
                     playerEngine = settings.playerEngine,
                     minimalistMode = settings.minimalistModeEnabled || isMobileFullscreen,
+                    preferredAudioLanguage = settings.preferredAudioLanguage,
+                    preferredAudioFormat = settings.preferredAudioFormat,
+                    autoSelectBestAudio = settings.autoSelectBestAudio,
                     onChannelSwitched = { isNext ->
                         val list = channels
                         val active = activeChannel
@@ -761,6 +770,9 @@ fun MobileAdaptiveLayout(
                             decoderMode = settings.decoder,
                             playerEngine = settings.playerEngine,
                             minimalistMode = settings.minimalistModeEnabled,
+                            preferredAudioLanguage = settings.preferredAudioLanguage,
+                            preferredAudioFormat = settings.preferredAudioFormat,
+                            autoSelectBestAudio = settings.autoSelectBestAudio,
                             onChannelSwitched = { isNext ->
                                 val list = channels
                                 val active = activeChannel
@@ -1232,6 +1244,98 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text("一键清理缓存", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // Smart Audio and Multi-track adaptive configuration
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("智能音轨与音频自适应", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("自动检测最佳音频轨", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("检测音轨的语言和质量并自动切换最佳声道", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Switch(
+                        checked = settings.autoSelectBestAudio,
+                        onCheckedChange = { viewModel.updateAutoSelectBestAudio(it) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text("首选音轨语言 (Preferred Language)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val languages = listOf("Auto", "zh", "en")
+                    languages.forEach { lang ->
+                        val isSelected = settings.preferredAudioLanguage == lang
+                        Button(
+                            onClick = { viewModel.updatePreferredAudioLanguage(lang) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = when (lang) {
+                                    "Auto" -> "自动智能"
+                                    "zh" -> "中文"
+                                    "en" -> "英文 (English)"
+                                    else -> lang
+                                },
+                                fontSize = 11.sp,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text("首选音频格式与质量 (Preferred Format)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val formats = listOf("Auto", "Dolby/AC-3", "DRA/国标", "Surround/多声道", "Stereo/双声道")
+                    formats.forEach { fmt ->
+                        val isSelected = settings.preferredAudioFormat == fmt
+                        Button(
+                            onClick = { viewModel.updatePreferredAudioFormat(fmt) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = when (fmt) {
+                                    "Auto" -> "智能"
+                                    "Dolby/AC-3" -> "杜比"
+                                    "DRA/国标" -> "DRA"
+                                    "Surround/多声道" -> "多声道"
+                                    "Stereo/双声道" -> "双声道"
+                                    else -> fmt
+                                },
+                                fontSize = 9.sp,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }

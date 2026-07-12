@@ -19,5 +19,8 @@ data class AppSettings(
     val autoCacheEnabled: Boolean = true,
     val playbackSpeed: Float = 1.0f,
     val autoFullscreenEnabled: Boolean = false,
-    val minimalistModeEnabled: Boolean = false
+    val minimalistModeEnabled: Boolean = false,
+    val preferredAudioLanguage: String = "Auto",
+    val preferredAudioFormat: String = "Auto",
+    val autoSelectBestAudio: Boolean = true
 )

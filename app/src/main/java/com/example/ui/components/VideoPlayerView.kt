@@ -54,9 +54,15 @@ fun VideoPlayerView(
     onFullscreenToggle: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
     onConfirmClick: (() -> Unit)? = null,
+    preferredAudioLanguage: String = "Auto",
+    preferredAudioFormat: String = "Auto",
+    autoSelectBestAudio: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val currentPreferredAudioLanguage by rememberUpdatedState(preferredAudioLanguage)
+    val currentPreferredAudioFormat by rememberUpdatedState(preferredAudioFormat)
+    val currentAutoSelectBestAudio by rememberUpdatedState(autoSelectBestAudio)
     var isPlaying by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showControls by remember { mutableStateOf(true) }
@@ -298,6 +304,90 @@ fun VideoPlayerView(
         }
     }
 
+    fun findBestAudioTrackIndex(
+        tracks: androidx.media3.common.Tracks,
+        prefLang: String,
+        prefFormat: String
+    ): Int {
+        var bestIndex = -1
+        var bestScore = -1
+        var currentAudioIndex = 0
+
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_AUDIO) {
+                for (i in 0 until group.length) {
+                    val format = group.getTrackFormat(i)
+                    var score = 0
+
+                    // 1. Language matching
+                    val lang = format.language?.lowercase() ?: ""
+                    if (prefLang == "Auto") {
+                        if (lang.contains("zh") || lang.contains("chi") || lang.contains("zho") || lang.contains("cmn")) {
+                            score += 15
+                        } else if (lang.isEmpty() || lang == "und") {
+                            score += 5
+                        }
+                    } else if (prefLang.isNotEmpty() && prefLang != "Auto") {
+                        if (lang.contains(prefLang.lowercase())) {
+                            score += 30
+                        }
+                    }
+
+                    // 2. Format matching
+                    val mime = format.sampleMimeType?.lowercase() ?: ""
+                    val isDolby = mime.contains("ac3") || mime.contains("eac3") || mime.contains("dolby")
+                    val isAac = mime.contains("mp4a") || mime.contains("aac")
+                    val isDra = mime.contains("dra")
+                    val channelCount = format.channelCount
+
+                    if (prefFormat == "Dolby/AC-3" || prefFormat == "Dolby") {
+                        if (isDolby) {
+                            score += 40
+                        } else if (channelCount > 2) {
+                            score += 20
+                        }
+                    } else if (prefFormat == "DRA/国标" || prefFormat == "DRA") {
+                        if (isDra) {
+                            score += 40
+                        }
+                    } else if (prefFormat == "Surround/多声道" || prefFormat == "Surround") {
+                        if (channelCount > 2) {
+                            score += 40
+                        } else if (isDolby) {
+                            score += 20
+                        }
+                    } else if (prefFormat == "Stereo/双声道" || prefFormat == "Stereo") {
+                        if (channelCount == 2) {
+                            score += 40
+                        }
+                    } else if (prefFormat == "Auto") {
+                        if (isDolby) {
+                            score += 25
+                        } else if (channelCount > 2) {
+                            score += 20
+                        } else if (isAac) {
+                            score += 10
+                        } else if (isDra) {
+                            score += 8
+                        }
+                    }
+
+                    // Tie breakers
+                    score += channelCount * 2
+                    score += (format.sampleRate / 8000)
+                    score += (format.bitrate / 50000).coerceAtLeast(0)
+
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestIndex = currentAudioIndex
+                    }
+                    currentAudioIndex++
+                }
+            }
+        }
+        return bestIndex
+    }
+
     // Handle lifecycle and tracks changed listener
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -305,28 +395,59 @@ fun VideoPlayerView(
                 val newVideoTracks = mutableListOf<String>()
                 val newAudioTracks = mutableListOf<String>()
                 
+                var currentVideoIndex = 0
+                var selectedVideoIndex = 0
+                var currentAudioIndex = 0
+                var selectedAudioIndex = 0
+                
                 for (group in tracks.groups) {
                     if (group.type == C.TRACK_TYPE_VIDEO) {
                         for (i in 0 until group.length) {
                             val format = group.getTrackFormat(i)
                             val label = format.label ?: "视频轨 ${newVideoTracks.size + 1} (${format.width}x${format.height})"
                             newVideoTracks.add(label)
+                            if (group.isTrackSelected(i)) {
+                                selectedVideoIndex = currentVideoIndex
+                            }
+                            currentVideoIndex++
                         }
                     } else if (group.type == C.TRACK_TYPE_AUDIO) {
                         for (i in 0 until group.length) {
                             val format = group.getTrackFormat(i)
                             val language = format.language?.let { " [$it]" } ?: ""
-                            val label = format.label ?: "音频轨 ${newAudioTracks.size + 1}${language}"
+                            val mime = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: "UNKNOWN"
+                            val channels = when (format.channelCount) {
+                                1 -> "单声道"
+                                2 -> "立体声"
+                                6 -> "5.1环绕声"
+                                8 -> "7.1环绕声"
+                                else -> "${format.channelCount}声道"
+                            }
+                            val label = format.label ?: "音频轨 ${newAudioTracks.size + 1} ($mime, $channels)$language"
                             newAudioTracks.add(label)
+                            if (group.isTrackSelected(i)) {
+                                selectedAudioIndex = currentAudioIndex
+                            }
+                            currentAudioIndex++
                         }
                     }
                 }
                 
                 if (newVideoTracks.isNotEmpty()) {
                     videoTracks = newVideoTracks
+                    selectedVideoTrackIndex = selectedVideoIndex
                 }
                 if (newAudioTracks.isNotEmpty()) {
                     audioTracks = newAudioTracks
+                    selectedAudioTrackIndex = selectedAudioIndex
+                }
+
+                // Auto Select Best Audio if enabled
+                if (currentAutoSelectBestAudio && newAudioTracks.isNotEmpty()) {
+                    val bestAudioIndex = findBestAudioTrackIndex(tracks, currentPreferredAudioLanguage, currentPreferredAudioFormat)
+                    if (bestAudioIndex != -1 && bestAudioIndex != selectedAudioIndex) {
+                        selectAudioTrack(bestAudioIndex)
+                    }
                 }
             }
         }

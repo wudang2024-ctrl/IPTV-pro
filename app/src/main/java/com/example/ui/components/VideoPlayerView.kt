@@ -8,6 +8,8 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
@@ -469,12 +471,23 @@ fun VideoPlayerView(
                     }
                 } else false
             }
-            .clickable {
-                if (minimalistMode && onConfirmClick != null) {
-                    onConfirmClick()
-                } else {
-                    showControls = !showControls
-                }
+            .pointerInput(minimalistMode, onConfirmClick) {
+                detectTapGestures(
+                    onTap = {
+                        if (minimalistMode && onConfirmClick != null) {
+                            onConfirmClick()
+                        } else {
+                            showControls = !showControls
+                        }
+                    },
+                    onDoubleTap = {
+                        if (!minimalistMode) {
+                            isPlaying = !isPlaying
+                            if (isPlaying) exoPlayer.play() else exoPlayer.pause()
+                            showControls = true
+                        }
+                    }
+                )
             }
     ) {
         // Player View
@@ -602,212 +615,6 @@ fun VideoPlayerView(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Advanced configurations row (声音穿透 / 国标解码与DRA音轨)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Passthrough toggle
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "声音穿透",
-                                tint = if (passthroughEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("音频输出模式: ", color = Color.LightGray, fontSize = 11.sp)
-                            listOf(false to "解码输出 (PCM)", true to "穿透输出 (Passthrough/Bitstream)").forEach { (value, label) ->
-                                TextButton(
-                                    onClick = { passthroughEnabled = value },
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = if (passthroughEnabled == value) MaterialTheme.colorScheme.primary else Color.White
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                    modifier = Modifier.defaultMinSize(minWidth = 50.dp, minHeight = 24.dp)
-                                ) {
-                                    Text(
-                                        label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (passthroughEnabled == value) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-
-                        // Codec profiles status (AVS+, AVS2, DRA, AC3, PCM)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Audiotrack,
-                                contentDescription = "音轨解码",
-                                tint = if (avsPriorityEnabled) MaterialTheme.colorScheme.primary else Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("音频轨道解码: ", color = Color.LightGray, fontSize = 11.sp)
-                            TextButton(
-                                onClick = { avsPriorityEnabled = !avsPriorityEnabled },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = if (avsPriorityEnabled) MaterialTheme.colorScheme.primary else Color.LightGray
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                modifier = Modifier.defaultMinSize(minWidth = 50.dp, minHeight = 24.dp)
-                            ) {
-                                Text(
-                                    if (avsPriorityEnabled) "国标 AVS2/AVS+ & DRA/AC-3/PCM 双解码激活" else "基础解码引擎",
-                                    fontSize = 11.sp,
-                                    fontWeight = if (avsPriorityEnabled) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-
-                    // Video Track 1 and Audio Track Selector Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Video tracks selector
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Videocam,
-                                contentDescription = "视频轨",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("视频轨道: ", color = Color.LightGray, fontSize = 11.sp)
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(videoTracks.size) { index ->
-                                    val isSelected = selectedVideoTrackIndex == index
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.primary
-                                                else Color.White.copy(alpha = 0.12f)
-                                            )
-                                            .clickable { selectVideoTrack(index) }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = videoTracks[index],
-                                            fontSize = 10.sp,
-                                            color = Color.White,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Audio tracks selector
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Hearing,
-                                contentDescription = "音轨",
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("音频轨道: ", color = Color.LightGray, fontSize = 11.sp)
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(audioTracks.size) { index ->
-                                    val isSelected = selectedAudioTrackIndex == index
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.secondary
-                                                else Color.White.copy(alpha = 0.12f)
-                                            )
-                                            .clickable { selectAudioTrack(index) }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = audioTracks[index],
-                                            fontSize = 10.sp,
-                                            color = Color.White,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Sound Mode Selection Row (立体声 / 双声道, 单声道, 左声道, 右声道, 环绕声)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VolumeUp,
-                            contentDescription = "声道模式",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("声道与环绕声: ", color = Color.LightGray, fontSize = 11.sp)
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val modes = listOf(
-                                ChannelModeAudioProcessor.Mode.STEREO to "双声道 / 立体声",
-                                ChannelModeAudioProcessor.Mode.MONO to "单声道",
-                                ChannelModeAudioProcessor.Mode.LEFT_ONLY to "左声道",
-                                ChannelModeAudioProcessor.Mode.RIGHT_ONLY to "右声道",
-                                ChannelModeAudioProcessor.Mode.SURROUND to "5.1/7.1 环绕声"
-                            )
-                            items(modes.size) { index ->
-                                val (m, label) = modes[index]
-                                val isSelected = selectedSoundMode == m
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary
-                                            else Color.White.copy(alpha = 0.12f)
-                                        )
-                                        .clickable { selectedSoundMode = m }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 10.sp,
-                                        color = Color.White,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                    }
-
                     // Main Controls row
                     Row(
                         modifier = Modifier.fillMaxWidth(),

@@ -304,88 +304,57 @@ fun VideoPlayerView(
         }
     }
 
-    fun findBestAudioTrackIndex(
+    fun findUserPreferredAudioTrack(
         tracks: androidx.media3.common.Tracks,
-        prefLang: String,
-        prefFormat: String
+        prefFormat: String,
+        prefTrack: String
     ): Int {
-        var bestIndex = -1
-        var bestScore = -1
         var currentAudioIndex = 0
+        val audioTrackIndicesAndFormats = mutableListOf<Pair<Int, androidx.media3.common.Format>>()
 
         for (group in tracks.groups) {
             if (group.type == C.TRACK_TYPE_AUDIO) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
-                    var score = 0
-
-                    // 1. Language matching
-                    val lang = format.language?.lowercase() ?: ""
-                    if (prefLang == "Auto") {
-                        if (lang.contains("zh") || lang.contains("chi") || lang.contains("zho") || lang.contains("cmn")) {
-                            score += 15
-                        } else if (lang.isEmpty() || lang == "und") {
-                            score += 5
-                        }
-                    } else if (prefLang.isNotEmpty() && prefLang != "Auto") {
-                        if (lang.contains(prefLang.lowercase())) {
-                            score += 30
-                        }
-                    }
-
-                    // 2. Format matching
-                    val mime = format.sampleMimeType?.lowercase() ?: ""
-                    val isDolby = mime.contains("ac3") || mime.contains("eac3") || mime.contains("dolby")
-                    val isAac = mime.contains("mp4a") || mime.contains("aac")
-                    val isDra = mime.contains("dra")
-                    val channelCount = format.channelCount
-
-                    if (prefFormat == "Dolby/AC-3" || prefFormat == "Dolby") {
-                        if (isDolby) {
-                            score += 40
-                        } else if (channelCount > 2) {
-                            score += 20
-                        }
-                    } else if (prefFormat == "DRA/国标" || prefFormat == "DRA") {
-                        if (isDra) {
-                            score += 40
-                        }
-                    } else if (prefFormat == "Surround/多声道" || prefFormat == "Surround") {
-                        if (channelCount > 2) {
-                            score += 40
-                        } else if (isDolby) {
-                            score += 20
-                        }
-                    } else if (prefFormat == "Stereo/双声道" || prefFormat == "Stereo") {
-                        if (channelCount == 2) {
-                            score += 40
-                        }
-                    } else if (prefFormat == "Auto") {
-                        if (isDolby) {
-                            score += 25
-                        } else if (channelCount > 2) {
-                            score += 20
-                        } else if (isAac) {
-                            score += 10
-                        } else if (isDra) {
-                            score += 8
-                        }
-                    }
-
-                    // Tie breakers
-                    score += channelCount * 2
-                    score += (format.sampleRate / 8000)
-                    score += (format.bitrate / 50000).coerceAtLeast(0)
-
-                    if (score > bestScore) {
-                        bestScore = score
-                        bestIndex = currentAudioIndex
-                    }
+                    audioTrackIndicesAndFormats.add(currentAudioIndex to format)
                     currentAudioIndex++
                 }
             }
         }
-        return bestIndex
+
+        if (audioTrackIndicesAndFormats.isEmpty()) return -1
+
+        // 1. If a specific track is requested (Track 1, Track 2, Track 3)
+        if (prefTrack == "Track 1" && audioTrackIndicesAndFormats.size >= 1) {
+            return audioTrackIndicesAndFormats[0].first
+        }
+        if (prefTrack == "Track 2" && audioTrackIndicesAndFormats.size >= 2) {
+            return audioTrackIndicesAndFormats[1].first
+        }
+        if (prefTrack == "Track 3" && audioTrackIndicesAndFormats.size >= 3) {
+            return audioTrackIndicesAndFormats[2].first
+        }
+
+        // 2. If a specific format is requested
+        if (prefFormat != "Auto" && prefFormat.isNotEmpty()) {
+            for ((index, format) in audioTrackIndicesAndFormats) {
+                val mime = format.sampleMimeType?.lowercase() ?: ""
+                val label = format.label?.lowercase() ?: ""
+                val matches = when (prefFormat) {
+                    "AAC" -> mime.contains("aac") || mime.contains("mp4a") || label.contains("aac")
+                    "DRA" -> mime.contains("dra") || label.contains("dra")
+                    "AC-3" -> mime.contains("ac3") || mime.contains("ac-3") || label.contains("ac3") || label.contains("ac-3")
+                    "AC-3 / E-AC-3" -> mime.contains("ac3") || mime.contains("eac3") || mime.contains("ac-3") || mime.contains("e-ac-3") || label.contains("ac3") || label.contains("eac3")
+                    "AAC / MP2" -> mime.contains("aac") || mime.contains("mp4a") || mime.contains("mp2") || mime.contains("mpeg") || label.contains("aac") || label.contains("mp2")
+                    else -> false
+                }
+                if (matches) {
+                    return index
+                }
+            }
+        }
+
+        return -1
     }
 
     // Handle lifecycle and tracks changed listener
@@ -442,11 +411,11 @@ fun VideoPlayerView(
                     selectedAudioTrackIndex = selectedAudioIndex
                 }
 
-                // Auto Select Best Audio if enabled
-                if (currentAutoSelectBestAudio && newAudioTracks.isNotEmpty()) {
-                    val bestAudioIndex = findBestAudioTrackIndex(tracks, currentPreferredAudioLanguage, currentPreferredAudioFormat)
-                    if (bestAudioIndex != -1 && bestAudioIndex != selectedAudioIndex) {
-                        selectAudioTrack(bestAudioIndex)
+                // Apply manual selection rules if preference matches
+                if (newAudioTracks.isNotEmpty()) {
+                    val targetIndex = findUserPreferredAudioTrack(tracks, currentPreferredAudioFormat, currentPreferredAudioLanguage)
+                    if (targetIndex != -1 && targetIndex != selectedAudioIndex) {
+                        selectAudioTrack(targetIndex)
                     }
                 }
             }

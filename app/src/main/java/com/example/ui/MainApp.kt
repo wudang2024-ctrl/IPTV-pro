@@ -1164,29 +1164,29 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val engines = listOf("ExoPlayer", "IjkPlayer", "MpvPlayer", "VlcPlayer")
+                    val engines = listOf("ExoPlayer / Media3", "IjkPlayer", "MpvPlayer", "VlcPlayer")
                     engines.forEach { eng ->
-                        val isSelected = settings.playerEngine == eng
+                        val isSelected = settings.playerEngine == eng || (eng == "ExoPlayer / Media3" && settings.playerEngine == "ExoPlayer")
                         Button(
-                            onClick = { viewModel.updatePlayerEngine(eng) },
+                            onClick = { viewModel.updatePlayerEngine(if (eng == "ExoPlayer / Media3") "ExoPlayer" else eng) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("engine_btn_$eng"),
+                                .testTag("engine_btn_${eng.replace(" ", "_").replace("/", "_")}"),
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = when (eng) {
-                                    "ExoPlayer" -> "EXO 核心"
+                                    "ExoPlayer / Media3" -> "EXO / Media3"
                                     "IjkPlayer" -> "Ijk 核心"
                                     "MpvPlayer" -> "Mpv 核心"
                                     "VlcPlayer" -> "VLC 核心"
                                     else -> eng
                                 },
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1249,52 +1249,37 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
             }
         }
 
-        // Smart Audio and Multi-track adaptive configuration
+        // Audio and Track Manual Choice Configuration
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("智能音轨与音频自适应", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("音频与轨道自由选择", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("自动检测最佳音频轨", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("检测音轨的语言和质量并自动切换最佳声道", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Switch(
-                        checked = settings.autoSelectBestAudio,
-                        onCheckedChange = { viewModel.updateAutoSelectBestAudio(it) }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Text("首选音轨语言 (Preferred Language)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("首选音频轨道 (Preferred Track)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val languages = listOf("Auto", "zh", "en")
-                    languages.forEach { lang ->
-                        val isSelected = settings.preferredAudioLanguage == lang
+                    val tracksList = listOf("Auto", "Track 1", "Track 2", "Track 3")
+                    tracksList.forEach { trackItem ->
+                        val isSelected = settings.preferredAudioLanguage == trackItem
                         Button(
-                            onClick = { viewModel.updatePreferredAudioLanguage(lang) },
+                            onClick = { viewModel.updatePreferredAudioLanguage(trackItem) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surfaceVariant
                             ),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = when (lang) {
-                                    "Auto" -> "自动智能"
-                                    "zh" -> "中文"
-                                    "en" -> "英文 (English)"
-                                    else -> lang
+                                text = when (trackItem) {
+                                    "Auto" -> "自动"
+                                    "Track 1" -> "音轨 1"
+                                    "Track 2" -> "音轨 2"
+                                    "Track 3" -> "音轨 3"
+                                    else -> trackItem
                                 },
                                 fontSize = 11.sp,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1305,13 +1290,15 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text("首选音频格式与质量 (Preferred Format)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("首选音频格式与解码 (Preferred Format)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
+                
+                // Use FlowRow to arrange the custom codec buttons beautifully
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val formats = listOf("Auto", "Dolby/AC-3", "DRA/国标", "Surround/多声道", "Stereo/双声道")
+                    val formats = listOf("Auto", "AAC", "DRA", "AC-3", "AC-3 / E-AC-3", "AAC / MP2")
                     formats.forEach { fmt ->
                         val isSelected = settings.preferredAudioFormat == fmt
                         Button(
@@ -1320,19 +1307,12 @@ fun PlayerSettingsView(viewModel: IPTVViewModel) {
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surfaceVariant
                             ),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(bottom = 4.dp)
                         ) {
                             Text(
-                                text = when (fmt) {
-                                    "Auto" -> "智能"
-                                    "Dolby/AC-3" -> "杜比"
-                                    "DRA/国标" -> "DRA"
-                                    "Surround/多声道" -> "多声道"
-                                    "Stereo/双声道" -> "双声道"
-                                    else -> fmt
-                                },
-                                fontSize = 9.sp,
+                                text = fmt,
+                                fontSize = 10.sp,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

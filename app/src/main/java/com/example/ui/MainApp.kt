@@ -420,7 +420,7 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(16.dp)
+                                    .padding(12.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -428,8 +428,8 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "快速选台",
-                                        fontSize = 18.sp,
+                                        text = "节目列表",
+                                        fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
@@ -438,73 +438,9 @@ fun TVBoxAdaptiveLayout(viewModel: IPTVViewModel) {
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Playlist Selector
-                                Text("选择节目源", fontSize = 11.sp, color = Color.Gray)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LazyRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(playlists) { pl ->
-                                        val isSelected = pl.id == selectedPlaylistId
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    if (isSelected) MaterialTheme.colorScheme.primary
-                                                    else Color.DarkGray
-                                                )
-                                                .clickable { viewModel.selectPlaylist(pl.id) }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(
-                                                text = pl.name,
-                                                fontSize = 11.sp,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Category Selector
-                                Text("选择分类", fontSize = 11.sp, color = Color.Gray)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LazyRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(categories) { cat ->
-                                        val isSelected = cat == selectedCategory
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    if (isSelected) MaterialTheme.colorScheme.secondary
-                                                    else Color.DarkGray.copy(alpha = 0.6f)
-                                                )
-                                                .clickable { viewModel.selectCategory(cat) }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(
-                                                text = cat,
-                                                fontSize = 11.sp,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
 
                                 // Channels List
-                                Text("选择频道", fontSize = 11.sp, color = Color.Gray)
-                                Spacer(modifier = Modifier.height(4.dp))
                                 LazyColumn(
                                     modifier = Modifier.fillMaxHeight(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)

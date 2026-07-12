@@ -411,7 +411,6 @@ fun TVBoxAdaptiveLayout(
                         onConfirmClick = { showLeftOverlayChannels = !showLeftOverlayChannels },
                         modifier = Modifier.fillMaxSize()
                     )
-                }
 
                 // Left program selection list overlay in minimalist/fullscreen mode
                 androidx.compose.animation.AnimatedVisibility(
@@ -538,6 +537,7 @@ fun TVBoxAdaptiveLayout(
                         Icon(Icons.Default.Dashboard, "开启多画面", tint = Color.White)
                     }
                 }
+            }
 
             // EPG Section
             if (!isTvFullscreen) {
